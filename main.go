@@ -20,7 +20,7 @@ func main() {
 
 	conn, err := redis.Dial("tcp", "127.0.0.1:6379")
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
 	}
 	defer conn.Close()
 
@@ -62,12 +62,12 @@ func main() {
 		if r.Method == "GET" {
 			cookie, errCookie := r.Cookie("auth")
 			if err != nil {
-				log.Fatal(err)
+				log.Println(err)
 			}
 			exists, err := redis.Bool(conn.Do("exists", cookie.Value))
 			log.Println("Redis get", cookie.Value, exists)
 			if err != nil {
-				log.Fatal(err)
+				log.Println(err)
 			}
 			//if cookie, err := r.Cookie("auth"); err == nil && xidMap[cookie.Value] {
 			if errCookie == nil && exists {
