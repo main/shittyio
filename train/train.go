@@ -11,13 +11,15 @@ type Train struct {
 	vagons  []VagonFunc
 }
 
-func (train *Train) New(handler http.Handler) *Train {
-	train := &Train{}
-	return train
+func New(handler http.Handler) *Train {
+	return &Train{handler: handler}
 }
 
 func (train *Train) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-
+	for _, vagon := range train.vagons {
+		vagon(w, r)
+	}
+	train.handler.ServeHTTP(w, r)
 }
 
 func (train *Train) AddVagon(vagon VagonFunc) {
