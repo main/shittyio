@@ -19,42 +19,30 @@ func (events *Events) Handler(event string, status int, body string) http.Handle
 	}
 }
 
+func (events *Events) Vagon(event string) VagonFunc {
+	return func(w http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
+		*events = append(*events, event)
+		next(w, r)
+	}
+}
+
 func (events Events) CompareWithEthalon(ethalon ...string) bool {
-	return reflect.DeepEqual(events, ethalon)
+	return reflect.DeepEqual([]string(events), ethalon)
 }
 
 func TestTrainBasic(t *testing.T) {
-	events := []string{}
+	events := Events{}
 	go func() {
 		mux := http.NewServeMux()
-		mux.HandleFunc("/page1", func(w http.ResponseWriter, r *http.Request) {
-			t.Log("cliet reached /page1")
-			w.WriteHeader(http.StatusOK)
-			fmt.Fprint(w, "OK")
-			events = append(events, "/page1")
-		})
-
+		mux.HandleFunc("/page1", events.Handler("/page1", http.StatusOK, "OK"))
 		trn := New(mux)
-
 		{
-			vagon1 := func(w http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
-				t.Log("vagon 1 launched")
-				defer t.Log("vagon 1 stopped(defer)")
-				events = append(events, "vagon 1")
-				next(w, r)
-				t.Log("vagon 1 stopped")
-			}
+			vagon1 := events.Vagon("vagon 1")
 			trn.AddVagon(vagon1)
 		}
 
 		{
-			vagon2 := func(w http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
-				t.Log("vagon 2 launched")
-				defer t.Log("vagon 2 stopped(defer)")
-				events = append(events, "vagon 2")
-				next(w, r)
-				t.Log("vagon 2 stopped")
-			}
+			vagon2 := events.Vagon("vagon 2")
 			trn.AddVagon(vagon2)
 		}
 
@@ -88,7 +76,7 @@ func TestTrainBasic(t *testing.T) {
 		t.Log(fmt.Sprintf("%#v", bodyVampire))
 		t.FailNow()
 	}
-	if !reflect.DeepEqual(events, []string{"vagon 1", "vagon 2", "/page1"}) {
+	if !events.CompareWithEthalon("vagon 1", "vagon 2", "/page1") {
 		t.Log("events isn't the same like etalon", events)
 		t.FailNow()
 	}
