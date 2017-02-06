@@ -9,16 +9,24 @@ import (
 	"testing"
 )
 
+type Events []string
+
+func (events *Events) Handler(event string, status int, body string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		*events = append(*events, event)
+		w.WriteHeader(status)
+		fmt.Fprint(w, body)
+	}
+}
+
+func (events Events) CompareWithEthalon(ethalon ...string) bool {
+	return reflect.DeepEqual(events, ethalon)
+}
+
 func TestTrainBasic(t *testing.T) {
 	events := []string{}
 	go func() {
 		mux := http.NewServeMux()
-		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-			t.Log("cliet reached /")
-			w.WriteHeader(404)
-			fmt.Fprintln(w, "You're lost, go home")
-			events = append(events, "/")
-		})
 		mux.HandleFunc("/page1", func(w http.ResponseWriter, r *http.Request) {
 			t.Log("cliet reached /page1")
 			w.WriteHeader(http.StatusOK)
@@ -29,22 +37,28 @@ func TestTrainBasic(t *testing.T) {
 		trn := New(mux)
 
 		{
-			vagon1 := func(w http.ResponseWriter, r *http.Request) {
+			vagon1 := func(w http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
 				t.Log("vagon 1 launched")
+				defer t.Log("vagon 1 stopped(defer)")
 				events = append(events, "vagon 1")
+				next(w, r)
+				t.Log("vagon 1 stopped")
 			}
 			trn.AddVagon(vagon1)
 		}
 
 		{
-			vagon2 := func(w http.ResponseWriter, r *http.Request) {
+			vagon2 := func(w http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
 				t.Log("vagon 2 launched")
+				defer t.Log("vagon 2 stopped(defer)")
 				events = append(events, "vagon 2")
+				next(w, r)
+				t.Log("vagon 2 stopped")
 			}
 			trn.AddVagon(vagon2)
 		}
 
-		if err := http.ListenAndServe(":9999", trn); err != nil {
+		if err := http.ListenAndServe(":9999", trn.Handler()); err != nil {
 			t.Error(err)
 			t.FailNow()
 		}
