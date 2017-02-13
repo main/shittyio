@@ -5,9 +5,43 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"reflect"
 	"testing"
 )
+
+var Srv Server
+
+type Server struct {
+	Handler http.Handler
+}
+
+func (s Server) SetHandler(h http.Handler) {
+	s.Handler = h
+}
+
+func (s *Server) Serve(addr string) {
+	if err := http.ListenAndServe(addr, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if s.Handler == nil {
+			panic("Handler is nil!111")
+		}
+		s.Handler.ServeHTTP(w, r)
+	})); err != nil {
+		panic(err)
+	}
+}
+
+//func (s Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+//	if s.Handler == nil {
+//		panic("Handler is nil!111")
+//	}
+//	s.Handler.ServeHTTP(w, r)
+//}
+
+func TestMain(m *testing.M) {
+	go Srv.Serve(":9999")
+	os.Exit(m.Run())
+}
 
 type Events []string
 
@@ -32,7 +66,8 @@ func (events Events) CompareWithEthalon(ethalon ...string) bool {
 
 func TestTrainBasic(t *testing.T) {
 	events := Events{}
-	go func() {
+
+	{
 		mux := http.NewServeMux()
 		mux.HandleFunc("/page1", events.Handler("/page1", http.StatusOK, "OK"))
 		trn := New(mux)
@@ -46,11 +81,9 @@ func TestTrainBasic(t *testing.T) {
 			trn.AddVagon(vagon2)
 		}
 
-		if err := http.ListenAndServe(":9999", trn.Handler()); err != nil {
-			t.Error(err)
-			t.FailNow()
-		}
-	}()
+		Srv.Handler = trn.Handler()
+	}
+
 	response, err := http.Get("http://localhost:9999/page1")
 	if err != nil {
 		t.Log(err)
@@ -84,33 +117,29 @@ func TestTrainBasic(t *testing.T) {
 
 func TestTrainReject(t *testing.T) {
 	events := Events{}
-	go func() {
-		mux := http.NewServeMux()
-		mux.HandleFunc("/page1", events.Handler("/page1", http.StatusOK, "OK"))
-		trn := New(mux)
-		{
-			vagon1 := events.Vagon("vagon 1")
-			trn.AddVagon(vagon1)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/page1", events.Handler("/page1", http.StatusOK, "OK"))
+	trn := New(mux)
+	{
+		vagon1 := events.Vagon("vagon 1")
+		trn.AddVagon(vagon1)
+	}
+	{
+		vagon2 := func(w http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
+			events = append(events, "vagon 2")
+			w.WriteHeader(http.StatusForbidden)
+			fmt.Fprint(w, "Forbidden")
 		}
-		{
-			vagon2 := func(w http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
-				events = append(events, "vagon 2")
-				w.WriteHeader(http.StatusForbidden)
-				fmt.Fprint(w, "Forbidden")
-			}
-			trn.AddVagon(vagon2)
-		}
-		{
-			vagon3 := events.Vagon("vagon 3")
-			trn.AddVagon(vagon3)
-		}
+		trn.AddVagon(vagon2)
+	}
+	{
+		vagon3 := events.Vagon("vagon 3")
+		trn.AddVagon(vagon3)
+	}
 
-		if err := http.ListenAndServe(":9998", trn.Handler()); err != nil {
-			t.Error(err)
-			t.FailNow()
-		}
-	}()
-	response, err := http.Get("http://localhost:9998/page1")
+	Srv.Handler = trn.Handler()
+
+	response, err := http.Get("http://localhost:9999/page1")
 	if err != nil {
 		t.Log(err)
 		t.FailNow()
