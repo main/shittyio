@@ -12,8 +12,7 @@ import (
 func TestHoldPanic(t *testing.T) {
 
 	trn := train.New(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Log("reached last handler")
-		panic(1)
+		panic("manual panic")
 	}))
 	trn.AddVagon(HoldPanic)
 	req := httptest.NewRequest("GET", "/something", nil)
@@ -25,7 +24,8 @@ func TestHoldPanic(t *testing.T) {
 		t.FailNow()
 	}
 	body, _ := ioutil.ReadAll(resp.Body)
-	if string(body) != "Panic" {
+	if string(body[0:21]) != "<p><font color=\"red\">" ||
+		string(body[len(body)-10:]) != "/code></p>" {
 		t.Log("body incorrect")
 		t.FailNow()
 	}

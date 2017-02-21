@@ -2,23 +2,17 @@ package vagons
 
 import (
 	"fmt"
-	"log"
 	"net/http"
+	"runtime/debug"
 )
 
 func HoldPanic(w http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
-	var a = 0
-	log.Println(1 / a)
-
-	log.Println("vagon start")
 	defer func() {
-		log.Println("defer start")
-		if recover() != nil {
-			log.Println("recover !=  nil")
+		if r := recover(); r != nil {
 			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprint(w, "Panic")
+			fmt.Fprint(w, "<p><font color=\"red\">", r, "</font></p>", "<p><code>",
+				string(debug.Stack()), "</code></p>")
 		}
 	}()
 	next(w, r)
-	log.Println("next handler finish")
 }
